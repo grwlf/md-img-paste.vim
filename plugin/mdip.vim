@@ -58,6 +58,25 @@ function! s:SaveFileTMPWSL(imgdir, tmpname) abort
     endif
 endfunction
 
+
+function! mdip#DetectImageLinux()
+    if $WAYLAND_DISPLAY != "" && executable('wl-copy')
+        let system_targets = "wl-paste --list-types"
+    elseif $DISPLAY != '' && executable('xclip')
+        let system_targets = 'xclip -selection clipboard -t TARGETS -o'
+    else
+        echoerr 'Needs xclip in X11 or wl-clipboard in Wayland.'
+        return 0
+    endif
+    let targets = filter(systemlist(system_targets), 'v:val =~# ''image/''')
+    if empty(targets)
+      return 0
+    else
+      return 1
+    endif
+endfunction
+
+
 function! s:SaveFileTMPLinux(imgdir, tmpname) abort
     if $WAYLAND_DISPLAY != "" && executable('wl-copy')
         let system_targets = "wl-paste --list-types"
@@ -186,15 +205,22 @@ function! g:MarkdownPasteImage(relpath)
 endfunction
 
 function! g:LatexPasteImage(relpath)
-    execute "normal! i\\includegraphics{" . a:relpath . "}\r\\caption{I"
+    execute "normal! i\\includegraphics[width=0"
     let ipos = getcurpos()
-    execute "normal! a" . "mage}"
+    execute "normal! a.9\\textwidth]{" . a:relpath . "}"
     call setpos('.', ipos)
-    execute "normal! ve\<C-g>"
+    execute "normal! v2e"
+endfunction
+
+function! g:LatexPasteURL(url)
+    execute "normal! i\\href{" . a:url . "}{"
+    let ipos = getcurpos()
+    execute "normal! a}"
+    call setpos('.', ipos)
 endfunction
 
 function! g:EmptyPasteImage(relpath)
-    execute "normal! i" . a:relpath 
+    execute "normal! i" . a:relpath
 endfunction
 
 let g:PasteImageFunction = 'g:MarkdownPasteImage'
@@ -224,13 +250,15 @@ function! mdip#MarkdownClipboardImage()
 
     let tmpfile = s:SaveFileTMP(workdir, g:mdip_tmpname)
     if tmpfile == 1
-        return
+        return 0
     else
         " let relpath = s:SaveNewFile(g:mdip_imgdir, tmpfile)
         let extension = split(tmpfile, '\.')[-1]
         let relpath = g:mdip_imgdir_intext . '/' . g:mdip_tmpname . '.' . extension
         if call(get(g:, 'PasteImageFunction'), [relpath])
-            return
+            return 1
+        else
+            return 1
         endif
     endif
 endfunction
